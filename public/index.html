@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Todo App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: sans-serif;
+      background: #f5f5f5;
+      padding: 32px 16px;
+      color: #333;
+    }
+
+    h1 { font-size: 1.5rem; margin-bottom: 24px; }
+    h2 { font-size: 1rem; margin-bottom: 12px; color: #555; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    /* フォーム */
+    .form-group { margin-bottom: 12px; }
+
+    label { display: block; font-size: 0.85rem; margin-bottom: 4px; color: #666; }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #4f8ef7;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .btn-primary { background: #4f8ef7; color: #fff; width: 100%; }
+    .btn-primary:hover { background: #3a7ae0; }
+    .btn-cancel { background: #eee; color: #555; width: 100%; margin-top: 6px; }
+    .btn-cancel:hover { background: #ddd; }
+
+    #form-title { font-size: 1rem; margin-bottom: 14px; color: #333; }
+
+    /* リスト */
+    .list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .filter-tabs { display: flex; gap: 8px; }
+
+    .tab {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      border: 1px solid #ddd;
+      background: #fff;
+      color: #666;
+    }
+
+    .tab.active { background: #4f8ef7; color: #fff; border-color: #4f8ef7; }
+
+    #todo-list { list-style: none; }
+
+    #todo-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    #todo-list li:last-child { border-bottom: none; }
+
+    #todo-list li input[type="checkbox"] { flex-shrink: 0; width: 16px; height: 16px; cursor: pointer; }
+
+    .todo-title {
+      flex: 1;
+      font-size: 0.95rem;
+    }
+
+    .todo-title.done {
+      text-decoration: line-through;
+      color: #aaa;
+    }
+
+    .actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    .btn-edit {
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #555;
+    }
+
+    .btn-edit:hover { background: #f0f0f0; }
+
+    .btn-delete {
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      background: #fff;
+      border: 1px solid #fcc;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #e55;
+    }
+
+    .btn-delete:hover { background: #fff0f0; }
+
+    #empty-msg {
+      text-align: center;
+      color: #aaa;
+      font-size: 0.9rem;
+      padding: 24px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+
+    <!-- 左：フォーム -->
+    <div class="card">
+      <div id="form-title">新しいTodoを追加</div>
+      <div class="form-group">
+        <label>タイトル</label>
+        <input type="text" id="input-title" placeholder="例：買い物をする" />
+      </div>
+      <button class="btn btn-primary" id="submit-btn" onclick="submitForm()">追加する</button>
+      <button class="btn btn-cancel" id="cancel-btn" style="display:none" onclick="cancelEdit()">キャンセル</button>
+    </div>
+
+    <!-- 右：一覧 -->
+    <div class="card">
+      <div class="list-header">
+        <h2>Todo一覧</h2>
+        <div class="filter-tabs">
+          <button class="tab active" onclick="setFilter('all', this)">すべて</button>
+          <button class="tab" onclick="setFilter('active', this)">未完了</button>
+          <button class="tab" onclick="setFilter('done', this)">完了済み</button>
+        </div>
+      </div>
+      <ul id="todo-list"></ul>
+      <div id="empty-msg" style="display:none">Todoがありません</div>
+    </div>
+
+  </div>
+
+  <script>
+    let todos = [];
+    let editingId = null;
+    let currentFilter = 'all';
+
+    async function fetchTodos() {
+      const res = await fetch('/api/todos');
+      todos = await res.json();
+      renderList();
+    }
+
+    function renderList() {
+      const list = document.getElementById('todo-list');
+      const emptyMsg = document.getElementById('empty-msg');
+
+      const filtered = todos.filter(t => {
+        if (currentFilter === 'active') return !t.done;
+        if (currentFilter === 'done') return t.done;
+        return true;
+      });
+
+      list.innerHTML = '';
+      emptyMsg.style.display = filtered.length === 0 ? 'block' : 'none';
+
+      filtered.forEach(todo => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <input type="checkbox" ${todo.done ? 'checked' : ''} onchange="toggleDone(${todo.id}, this.checked)" />
+          <span class="todo-title ${todo.done ? 'done' : ''}">${escapeHtml(todo.title)}</span>
+          <div class="actions">
+            <button class="btn-edit" onclick="startEdit(${todo.id})">編集</button>
+            <button class="btn-delete" onclick="deleteTodo(${todo.id})">削除</button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    async function submitForm() {
+      const title = document.getElementById('input-title').value.trim();
+      if (!title) return;
+
+      if (editingId !== null) {
+        await fetch(`/api/todos/${editingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title }),
+        });
+        cancelEdit();
+      } else {
+        await fetch('/api/todos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title }),
+        });
+        document.getElementById('input-title').value = '';
+      }
+      fetchTodos();
+    }
+
+    async function toggleDone(id, done) {
+      await fetch(`/api/todos/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done }),
+      });
+      fetchTodos();
+    }
+
+    async function deleteTodo(id) {
+      await fetch(`/api/todos/${id}`, { method: 'DELETE' });
+      fetchTodos();
+    }
+
+    function startEdit(id) {
+      const todo = todos.find(t => t.id === id);
+      editingId = id;
+      document.getElementById('input-title').value = todo.title;
+      document.getElementById('form-title').textContent = 'Todoを編集';
+      document.getElementById('submit-btn').textContent = '更新する';
+      document.getElementById('cancel-btn').style.display = 'block';
+    }
+
+    function cancelEdit() {
+      editingId = null;
+      document.getElementById('input-title').value = '';
+      document.getElementById('form-title').textContent = '新しいTodoを追加';
+      document.getElementById('submit-btn').textContent = '追加する';
+      document.getElementById('cancel-btn').style.display = 'none';
+    }
+
+    function setFilter(filter, el) {
+      currentFilter = filter;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      renderList();
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    fetchTodos();
+  </script>
+</body>
+</html>
